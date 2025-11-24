@@ -1,0 +1,48 @@
+stages:
+  - build
+  - test
+  - package
+  - packing
+  - deploy
+
+variables:
+  MAVEN_OPTS: "-Dmaven.test.failure.ignore=true"
+
+build:
+  stage: build
+  script:
+    - mvn -B compile
+
+test:
+  stage: test
+  script:
+    - mvn test
+
+package:
+  stage: package
+  script:
+    - mvn -B package
+  artifacts:
+    paths:
+      - target/*.jar
+
+packing:
+  stage: packing
+  before_script:
+    - apk update && apk add --no-cache openssh-client
+  script:
+    - chmod 600 $AWS_KEY
+    - echo "Copiando JAR a EC2..."
+    - scp -o StrictHostKeyChecking=no -i $AWS_KEY target/*.jar ubuntu@3.145.138.105:/home/ubuntu/to-do-list-api/api.jar
+
+deploy:
+  stage: deploy
+  before_script:
+    - apk update && apk add --no-cache openssh-client
+  script:
+    - chmod 600 $AWS_KEY
+    - echo "Deteniendo app anterior..."
+    - ssh -o StrictHostKeyChecking=no -i $AWS_KEY ubuntu@3.145.138.105 "pkill -f 'java -jar' || true"
+    - echo "Ejecutando nueva versión..."
+    - ssh -o StrictHostKeyChecking=no -i $AWS_KEY ubuntu@3.145.138.105 "nohup java -jar /home/ubuntu/to-do-list-api/api.jar > /dev/null 2>&1 &"
+  environment: production
